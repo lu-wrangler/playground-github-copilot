@@ -1,36 +1,212 @@
-import { useCallback, useEffect, useRef, useState, type JSX } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type JSX,
+  type ComponentType,
+} from 'react';
 import { Search, X } from 'lucide-react';
-import type { SearchItem } from '@/types';
+import type { AutocompleteItem } from '@/types';
 import { searchItems } from '@/services/api';
 
 const DEBOUNCE_MS = 300;
 const MIN_QUERY_LENGTH = 1;
 const MAX_RESULTS = 10;
 
-interface TypeaheadProps {
-  onSelect?: (item: SearchItem) => void;
+/**
+ * Generic fetch function type
+ * Allows custom data sources (API, static list, composite properties)
+ */
+export type FetchFunction<T extends AutocompleteItem> = (
+  query: string,
+  limit: number
+) => Promise<T[]>;
+
+/**
+ * Default item renderer component
+ * Receives the item and highlight state, returns JSX
+ */
+export type ItemRenderer<T extends AutocompleteItem> = ComponentType<{
+  item: T;
+  isSelected: boolean;
+  onMouseEnter: () => void;
+  onClick: () => void;
+}>;
+
+interface TypeaheadProps<T extends AutocompleteItem = AutocompleteItem> {
+  /**
+   * Custom fetch function to retrieve items
+   * @default Uses the default searchItems API function
+   */
+  onFetch?: FetchFunction<T>;
+
+  /**
+   * Custom component to render each autocomplete item
+   * @default Uses default SearchItem renderer
+   */
+  itemRenderer?: ItemRenderer<T>;
+
+  /**
+   * Called when an item is selected
+   */
+  onSelect?: (item: T) => void;
+
+  /**
+   * Placeholder text for the input field
+   */
   placeholder?: string;
+
+  /**
+   * Additional CSS classes
+   */
   className?: string;
+
+  /**
+   * Disable the input and dropdown
+   */
   disabled?: boolean;
+
+  /**
+   * Maximum number of results to display
+   * @default 10
+   */
+  maxResults?: number;
+
+  /**
+   * Debounce delay in milliseconds
+   * @default 300
+   */
+  debounceMs?: number;
+
+  /**
+   * Minimum query length to trigger search
+   * @default 1
+   */
+  minQueryLength?: number;
+
+  /**
+   * ARIA label for the input field
+   */
+  ariaLabel?: string;
+
+  /**
+   * Callback for errors
+   */
+  onError?: (error: Error) => void;
 }
 
 /**
- * Typeahead/Autocomplete search component with accessibility support
+ * Default item renderer for SearchItem
+ */
+const DefaultItemRenderer = ({
+  item,
+  isSelected,
+  onMouseEnter,
+  onClick,
+}: {
+  item: AutocompleteItem;
+  isSelected: boolean;
+  onMouseEnter: () => void;
+  onClick: () => void;
+}): JSX.Element => {
+  const searchItem = item as unknown as {
+    label?: string;
+    value?: string;
+    category?: string;
+    description?: string;
+  };
+  return (
+    <li
+      onClick={onClick}
+      onMouseEnter={onMouseEnter}
+      role="option"
+      aria-selected={isSelected}
+      className={`cursor-pointer border-b px-4 py-3 text-sm transition-colors last:border-b-0 ${
+        isSelected ? 'bg-blue-50 text-blue-900' : 'hover:bg-gray-50'
+      }`}
+    >
+      <div className="font-medium text-gray-900">{searchItem.label}</div>
+      {searchItem.description && (
+        <div className="text-xs text-gray-500">{searchItem.description}</div>
+      )}
+      {searchItem.category && (
+        <div className="text-xs text-gray-400">{searchItem.category}</div>
+      )}
+    </li>
+  );
+};
+
+/**
+ * Generic Typeahead/Autocomplete search component with extensibility
+ *
  * Features:
- * - Debounced search
- * - Keyboard navigation
+ * - Customizable fetch function (API endpoint, static list, composite data)
+ * - Customizable item renderer for styling flexibility
+ * - Debounced search with configurable delay
+ * - Keyboard navigation (Arrow keys, Enter, Escape)
  * - ARIA labels for accessibility
  * - XSS protection through React's built-in escaping
- * - Loading states
+ * - Error handling and loading states
+ *
+ * @example
+ * ```tsx
+ * // Basic usage with default SearchItem
+ * <Typeahead
+ *   onFetch={async (q) => searchItems(q)}
+ *   onSelect={(item) => console.log(item)}
+ * />
+ *
+ * // Advanced usage with custom data and renderer
+ * interface User {
+ *   id: string;
+ *   name: string;
+ *   email: string;
+ * }
+ *
+ * const fetchUsers: FetchFunction<User> = async (q, limit) => {
+ *   const res = await fetch(`/api/users?q=${q}&limit=${limit}`);
+ *   return res.json();
+ * };
+ *
+ * const UserRenderer: ItemRenderer<User> = ({
+ *   item,
+ *   isSelected,
+ *   onClick,
+ *   onMouseEnter,
+ * }) => (
+ *   <li
+ *     onClick={onClick}
+ *     onMouseEnter={onMouseEnter}
+ *     className={isSelected ? 'bg-blue-100' : ''}
+ *   >
+ *     <strong>{item.name}</strong>
+ *     <p>{item.email}</p>
+ *   </li>
+ * );
+ *
+ * <Typeahead<User>
+ *   onFetch={fetchUsers}
+ *   itemRenderer={UserRenderer}
+ *   onSelect={(user) => console.log(user)}
+ * />
+ * ```
  */
-export const Typeahead = ({
+export const Typeahead = <T extends AutocompleteItem = AutocompleteItem>({
+  onFetch,
+  itemRenderer: ItemRenderer = DefaultItemRenderer,
   onSelect,
   placeholder = 'Search...',
   className = '',
   disabled = false,
-}: TypeaheadProps): JSX.Element => {
+  maxResults = MAX_RESULTS,
+  debounceMs = DEBOUNCE_MS,
+  minQueryLength = MIN_QUERY_LENGTH,
+  ariaLabel = 'Search items',
+  onError,
+}: TypeaheadProps<T>): JSX.Element => {
   const [query, setQuery] = useState('');
-  const [results, setResults] = useState<SearchItem[]>([]);
+  const [results, setResults] = useState<T[]>([]);
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(-1);
@@ -40,31 +216,52 @@ export const Typeahead = ({
   const resultsRef = useRef<HTMLDivElement>(null);
   const debounceTimer = useRef<NodeJS.Timeout | null>(null);
 
+  // Validate parameters
+  const validMaxResults = Math.max(1, Math.min(maxResults, 100));
+  const validDebounceMs = Math.max(0, debounceMs);
+  const validMinQueryLength = Math.max(0, minQueryLength);
+
+  // Default fetch function using the API service
+  const defaultFetch: FetchFunction<T> = useCallback(
+    async (q: string) => {
+      const results = await searchItems(q, validMaxResults);
+      return results as unknown as T[];
+    },
+    [validMaxResults]
+  );
+
+  const fetchFunction = onFetch || defaultFetch;
+
   // Search handler with security considerations
-  const handleSearch = useCallback(async (searchQuery: string) => {
-    if (searchQuery.length < MIN_QUERY_LENGTH) {
-      setResults([]);
-      setIsOpen(false);
+  const handleSearch = useCallback(
+    async (searchQuery: string) => {
+      if (searchQuery.length < validMinQueryLength) {
+        setResults([]);
+        setIsOpen(false);
+        setError(null);
+        return;
+      }
+
+      setIsLoading(true);
       setError(null);
-      return;
-    }
 
-    setIsLoading(true);
-    setError(null);
-
-    try {
-      const items = await searchItems(searchQuery, MAX_RESULTS);
-      setResults(items);
-      setIsOpen(items.length > 0);
-      setSelectedIndex(-1);
-    } catch (err) {
-      setError('Failed to fetch search results');
-      console.error('Search error:', err);
-      setResults([]);
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
+      try {
+        const items = await fetchFunction(searchQuery, validMaxResults);
+        setResults(items);
+        setIsOpen(items.length > 0);
+        setSelectedIndex(-1);
+      } catch (err) {
+        const error = err instanceof Error ? err : new Error(String(err));
+        setError('Failed to fetch search results');
+        console.error('Search error:', error);
+        setResults([]);
+        onError?.(error);
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [fetchFunction, validMaxResults, validMinQueryLength, onError]
+  );
 
   // Debounced search
   const handleInputChange = useCallback(
@@ -77,14 +274,14 @@ export const Typeahead = ({
 
       debounceTimer.current = setTimeout(() => {
         handleSearch(value);
-      }, DEBOUNCE_MS);
+      }, validDebounceMs);
     },
-    [handleSearch]
+    [handleSearch, validDebounceMs]
   );
 
   const handleSelectItem = useCallback(
-    (item: SearchItem) => {
-      setQuery(item.label);
+    (item: T) => {
+      setQuery(item.id);
       setIsOpen(false);
       setResults([]);
       setSelectedIndex(-1);
@@ -177,7 +374,7 @@ export const Typeahead = ({
           onFocus={() => query && setIsOpen(true)}
           disabled={disabled}
           placeholder={placeholder}
-          aria-label="Search items"
+          aria-label={ariaLabel}
           aria-autocomplete="list"
           aria-controls="search-results"
           aria-expanded={isOpen}
@@ -228,28 +425,13 @@ export const Typeahead = ({
           {!isLoading && results.length > 0 && (
             <ul className="max-h-96 overflow-y-auto">
               {results.map((item, index) => (
-                <li
+                <ItemRenderer
                   key={item.id}
-                  onClick={() => handleSelectItem(item)}
+                  item={item}
+                  isSelected={selectedIndex === index}
                   onMouseEnter={() => setSelectedIndex(index)}
-                  role="option"
-                  aria-selected={selectedIndex === index}
-                  className={`cursor-pointer border-b px-4 py-3 text-sm transition-colors last:border-b-0 ${
-                    selectedIndex === index
-                      ? 'bg-blue-50 text-blue-900'
-                      : 'hover:bg-gray-50'
-                  }`}
-                >
-                  <div className="font-medium text-gray-900">{item.label}</div>
-                  {item.description && (
-                    <div className="text-xs text-gray-500">
-                      {item.description}
-                    </div>
-                  )}
-                  {item.category && (
-                    <div className="text-xs text-gray-400">{item.category}</div>
-                  )}
-                </li>
+                  onClick={() => handleSelectItem(item)}
+                />
               ))}
             </ul>
           )}
