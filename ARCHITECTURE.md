@@ -322,6 +322,256 @@ npm run type-check
    - Loading message during search
    - Prevents UI jumping
 
+## Generic Typeahead Component Design
+
+The Typeahead component has been refactored to be fully generic and extensible, allowing developers to use it with any data source and custom rendering styles.
+
+### Generic Type Parameter
+
+```typescript
+export const Typeahead = <T extends AutocompleteItem = AutocompleteItem>({
+  ...
+}: TypeaheadProps<T>): JSX.Element
+```
+
+The component accepts a generic type parameter `T` that extends `AutocompleteItem`:
+
+```typescript
+interface AutocompleteItem {
+  id: string;
+  [key: string]: unknown;
+}
+```
+
+This allows the component to work with any data structure as long as it has a unique `id` property.
+
+### Custom Fetch Function
+
+The `onFetch` prop accepts a custom fetch function for flexible data sourcing:
+
+```typescript
+type FetchFunction<T> = (query: string, limit: number) => Promise<T[]>;
+```
+
+**Examples**:
+
+```typescript
+// REST API
+const fetchUsers: FetchFunction<User> = async (q, limit) => {
+  const res = await fetch(`/api/users?q=${q}&limit=${limit}`);
+  return res.json();
+};
+
+// GraphQL API
+const fetchProducts: FetchFunction<Product> = async (q, limit) => {
+  const res = await fetch('/graphql', {
+    method: 'POST',
+    body: JSON.stringify({
+      query: `query { searchProducts(q: "${q}", limit: ${limit}) { ... } }`
+    })
+  });
+  const data = await res.json();
+  return data.data.searchProducts;
+};
+
+// Static data with filtering
+const fetchCategories: FetchFunction<Category> = async (q, limit) => {
+  return CATEGORIES.filter(c => 
+    c.name.toLowerCase().includes(q.toLowerCase())
+  ).slice(0, limit);
+};
+
+// Composite data from multiple sources
+const fetchDocuments: FetchFunction<Document> = async (q, limit) => {
+  const [docs, wikis] = await Promise.all([
+    fetch(`/api/docs?q=${q}`).then(r => r.json()),
+    fetch(`/api/wikis?q=${q}`).then(r => r.json())
+  ]);
+  return [...docs, ...wikis].slice(0, limit);
+};
+```
+
+### Custom Item Renderer
+
+The `itemRenderer` prop accepts a custom React component for flexible styling:
+
+```typescript
+type ItemRenderer<T> = React.ComponentType<{
+  item: T;
+  isSelected: boolean;
+  onMouseEnter: () => void;
+  onClick: () => void;
+}>;
+```
+
+**Examples**:
+
+```typescript
+// Minimal renderer
+const MinimalRenderer: ItemRenderer<SearchItem> = ({
+  item,
+  isSelected,
+  onClick,
+  onMouseEnter,
+}) => (
+  <li 
+    onClick={onClick} 
+    onMouseEnter={onMouseEnter}
+    className={isSelected ? 'bg-indigo-600 text-white' : ''}
+  >
+    {item.label}
+  </li>
+);
+
+// Card-style renderer
+const CardRenderer: ItemRenderer<SearchItem> = ({
+  item,
+  isSelected,
+  onClick,
+  onMouseEnter,
+}) => (
+  <li 
+    onClick={onClick}
+    onMouseEnter={onMouseEnter}
+    className={`rounded-lg p-3 ${
+      isSelected ? 'bg-blue-100 shadow-md' : 'hover:bg-gray-100'
+    }`}
+  >
+    <h4 className="font-semibold">{item.label}</h4>
+    {item.description && (
+      <p className="text-xs text-gray-600">{item.description}</p>
+    )}
+  </li>
+);
+
+// User profile renderer
+const UserRenderer: ItemRenderer<User> = ({
+  item,
+  isSelected,
+  onClick,
+  onMouseEnter,
+}) => (
+  <li
+    onClick={onClick}
+    onMouseEnter={onMouseEnter}
+    className={`flex items-center p-3 ${
+      isSelected ? 'bg-blue-50' : 'hover:bg-gray-50'
+    }`}
+  >
+    <img
+      src={item.avatar}
+      alt={item.name}
+      className="w-8 h-8 rounded-full mr-3"
+    />
+    <div>
+      <p className="font-medium">{item.name}</p>
+      <p className="text-xs text-gray-500">{item.email}</p>
+    </div>
+  </li>
+);
+```
+
+### Complete Example with Custom Type
+
+```typescript
+// Define your data type
+interface Product {
+  id: string;
+  name: string;
+  price: number;
+  category: string;
+  inStock: boolean;
+}
+
+// Create custom fetch function
+const fetchProducts: FetchFunction<Product> = async (q, limit) => {
+  const res = await fetch(`/api/products?q=${q}&limit=${limit}`);
+  return res.json();
+};
+
+// Create custom renderer
+const ProductRenderer: ItemRenderer<Product> = ({
+  item,
+  isSelected,
+  onClick,
+  onMouseEnter,
+}) => (
+  <li
+    onClick={onClick}
+    onMouseEnter={onMouseEnter}
+    className={`p-3 border-b ${isSelected ? 'bg-blue-50' : ''}`}
+  >
+    <div className="flex justify-between items-center">
+      <div>
+        <h4 className="font-semibold">{item.name}</h4>
+        <p className="text-xs text-gray-500">{item.category}</p>
+      </div>
+      <div className="text-right">
+        <p className="font-medium">${item.price}</p>
+        <p className={`text-xs ${item.inStock ? 'text-green-600' : 'text-red-600'}`}>
+          {item.inStock ? 'In Stock' : 'Out of Stock'}
+        </p>
+      </div>
+    </div>
+  </li>
+);
+
+// Use with custom type
+<Typeahead<Product>
+  onFetch={fetchProducts}
+  itemRenderer={ProductRenderer}
+  onSelect={(product) => addToCart(product)}
+  placeholder="Search products..."
+  maxResults={8}
+/>
+```
+
+### Backward Compatibility
+
+The component maintains full backward compatibility with existing implementations:
+
+```typescript
+// All of these still work without changes
+<Typeahead />
+<Typeahead placeholder="Custom placeholder" />
+<Typeahead<SearchItem> maxResults={20} />
+<Typeahead onSelect={handleSelect} />
+```
+
+Default behavior:
+- Uses built-in `searchItems()` API for fetching
+- Uses `DefaultItemRenderer` for rendering SearchItem objects
+- Maintains original styling and behavior
+
+### Configuration Options
+
+```typescript
+interface TypeaheadProps<T extends AutocompleteItem> {
+  // Custom fetch function (optional, uses searchItems by default)
+  onFetch?: FetchFunction<T>;
+  
+  // Custom item renderer (optional, uses DefaultItemRenderer by default)
+  itemRenderer?: ItemRenderer<T>;
+  
+  // Selection callback
+  onSelect?: (item: T) => void;
+  
+  // Error callback
+  onError?: (error: Error) => void;
+  
+  // UI configuration
+  placeholder?: string;
+  className?: string;
+  disabled?: boolean;
+  ariaLabel?: string;
+  
+  // Behavior configuration
+  maxResults?: number;        // 1-100, default 10
+  debounceMs?: number;       // default 300ms
+  minQueryLength?: number;   // default 1
+}
+```
+
 ## API Service
 
 The mock API (`api.ts`) simulates a real backend with:
