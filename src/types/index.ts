@@ -1,4 +1,13 @@
-export interface SearchItem {
+/**
+ * Generic type for any autocomplete item
+ * Allows developers to use custom data structures
+ */
+export interface AutocompleteItem {
+  id: string;
+  [key: string]: unknown;
+}
+
+export interface SearchItem extends AutocompleteItem {
   id: string;
   label: string;
   value: string;
