@@ -24,13 +24,17 @@ interface TagItemProps {
   item: SearchItem;
 }
 
-const MinimalItemRenderer: ItemRenderer<SearchItem> = ({ item }: MinimalItemProps) => (
+const MinimalItemRenderer: ItemRenderer<SearchItem> = ({
+  item,
+}: MinimalItemProps) => (
   <div className="py-1 px-2">
     <div className="font-medium text-gray-900">{item.label}</div>
   </div>
 );
 
-const CardItemRenderer: ItemRenderer<SearchItem> = ({ item }: CardItemProps) => (
+const CardItemRenderer: ItemRenderer<SearchItem> = ({
+  item,
+}: CardItemProps) => (
   <div className="py-2 px-3 border-b border-gray-100">
     <div className="flex items-center justify-between">
       <div>
@@ -44,7 +48,9 @@ const CardItemRenderer: ItemRenderer<SearchItem> = ({ item }: CardItemProps) => 
   </div>
 );
 
-const IconItemRenderer: ItemRenderer<SearchItem> = ({ item }: IconItemProps) => (
+const IconItemRenderer: ItemRenderer<SearchItem> = ({
+  item,
+}: IconItemProps) => (
   <div className="py-2 px-3 flex items-center gap-3">
     <div className="w-8 h-8 bg-gradient-to-br from-blue-400 to-purple-500 rounded-full flex items-center justify-center">
       <span className="text-white text-xs font-bold">{item.label[0]}</span>
@@ -64,10 +70,14 @@ const TagItemRenderer: ItemRenderer<SearchItem> = ({ item }: TagItemProps) => (
 );
 
 export default function App() {
-  const [selectedRenderer, setSelectedRenderer] = useState<RendererOption>('default');
+  const [selectedRenderer, setSelectedRenderer] =
+    useState<RendererOption>('default');
   const [selectedItem, setSelectedItem] = useState<SearchItem | null>(null);
 
-  const renderers: Record<RendererOption, ItemRenderer<SearchItem> | undefined> = {
+  const renderers: Record<
+    RendererOption,
+    ItemRenderer<SearchItem> | undefined
+  > = {
     default: undefined,
     minimal: MinimalItemRenderer,
     card: CardItemRenderer,
@@ -80,7 +90,9 @@ export default function App() {
       <div className="max-w-3xl mx-auto px-4 py-12">
         {/* Header */}
         <div className="text-center mb-12">
-          <h1 className="text-4xl font-bold text-white mb-2">Typeahead Search</h1>
+          <h1 className="text-4xl font-bold text-white mb-2">
+            Typeahead Search
+          </h1>
           <p className="text-purple-200">Explore different renderer styles</p>
         </div>
 
@@ -90,19 +102,21 @@ export default function App() {
             Select Renderer Style:
           </label>
           <div className="flex flex-wrap gap-2">
-            {(['default', 'minimal', 'card', 'icon', 'tag'] as const).map((renderer) => (
-              <button
-                key={renderer}
-                onClick={() => setSelectedRenderer(renderer)}
-                className={`px-4 py-2 rounded-lg font-medium transition-all ${
-                  selectedRenderer === renderer
-                    ? 'bg-blue-500 text-white shadow-lg'
-                    : 'bg-white/20 text-white hover:bg-white/30'
-                }`}
-              >
-                {renderer.charAt(0).toUpperCase() + renderer.slice(1)}
-              </button>
-            ))}
+            {(['default', 'minimal', 'card', 'icon', 'tag'] as const).map(
+              (renderer) => (
+                <button
+                  key={renderer}
+                  onClick={() => setSelectedRenderer(renderer)}
+                  className={`px-4 py-2 rounded-lg font-medium transition-all ${
+                    selectedRenderer === renderer
+                      ? 'bg-blue-500 text-white shadow-lg'
+                      : 'bg-white/20 text-white hover:bg-white/30'
+                  }`}
+                >
+                  {renderer.charAt(0).toUpperCase() + renderer.slice(1)}
+                </button>
+              )
+            )}
           </div>
         </div>
 
@@ -124,10 +138,12 @@ export default function App() {
               <h3 className="text-white font-bold mb-2">Selected:</h3>
               <div className="text-green-100">
                 <p>
-                  <span className="font-semibold">Label:</span> {selectedItem.label}
+                  <span className="font-semibold">Label:</span>{' '}
+                  {selectedItem.label}
                 </p>
                 <p>
-                  <span className="font-semibold">Category:</span> {selectedItem.category}
+                  <span className="font-semibold">Category:</span>{' '}
+                  {selectedItem.category}
                 </p>
                 <p>
                   <span className="font-semibold">Description:</span>{' '}
@@ -144,7 +160,8 @@ export default function App() {
         {/* Info Section */}
         <div className="mt-8 text-center">
           <p className="text-purple-200 text-sm">
-            Type to search through the available items. Use arrow keys to navigate and Enter to select.
+            Type to search through the available items. Use arrow keys to
+            navigate and Enter to select.
           </p>
         </div>
       </div>
