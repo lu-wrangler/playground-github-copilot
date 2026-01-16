@@ -1,0 +1,13 @@
+{
+  "name": "@typeahead/config",
+  "version": "0.0.1",
+  "description": "Shared configuration for typeahead monorepo",
+  "private": true,
+  "exports": {
+    "./eslint": "./eslint.config.js",
+    "./prettier": "./prettier.config.js",
+    "./typescript": "./tsconfig.base.json",
+    "./tailwind": "./tailwind.config.js",
+    "./postcss": "./postcss.config.js"
+  }
+}
