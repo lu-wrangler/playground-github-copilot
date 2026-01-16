@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { searchItems, getItemById, getCategories } from '../api';
-import type { SearchItem } from '../../types';
+import { searchItems, getItemById, getCategories } from './api';
+import type { SearchItem } from '../types';
 
 describe('API Service', () => {
   describe('searchItems', () => {

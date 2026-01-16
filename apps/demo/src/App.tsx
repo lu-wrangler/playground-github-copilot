@@ -3,7 +3,6 @@ import {
   Typeahead,
   searchItems,
   ItemRenderer,
-  AutocompleteItem,
   SearchItem,
 } from '@typeahead/components';
 

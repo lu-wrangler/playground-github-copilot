@@ -2,7 +2,7 @@
   "$schema": "https://turbo.build/json-schema.json",
   "globalDependencies": ["**/.env", "**/.env.local"],
   "globalEnv": ["NODE_ENV"],
-  "pipeline": {
+  "tasks": {
     "build": {
       "dependsOn": ["^build"],
       "outputs": ["dist/**", ".next/**", "build/**"],
@@ -32,6 +32,5 @@
       "outputs": ["test-results/**"],
       "cache": false
     }
-  },
-  "extends": []
+  }
 }
