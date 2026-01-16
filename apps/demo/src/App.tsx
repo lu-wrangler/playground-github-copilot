@@ -109,7 +109,7 @@ export default function App() {
         {/* Search Component */}
         <div className="bg-white/10 backdrop-blur-md rounded-lg p-8 border border-white/20">
           <Typeahead<SearchItem>
-            fetchData={searchItems}
+            onFetch={searchItems}
             onSelect={(item) => {
               setSelectedItem(item);
             }}
